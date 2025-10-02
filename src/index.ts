@@ -49,6 +49,18 @@ export type {
   Outcome,
 } from './types/errors';
 
+export type {
+  // Provisioning types
+  ProvisionUserParams,
+  ProvisionUserResult,
+  RoleParams,
+  RoleResult,
+} from './types/provisioning';
+export type {
+  ProvisionOrganizationParams,
+  ProvisionOrganizationResult,
+} from './provisioning/organization';
+
 // ============================================================================
 // Session Management
 // ============================================================================
@@ -97,6 +109,28 @@ export {
 } from './dataset/strategy';
 
 // ============================================================================
+// Provisioning (Admin/Superuser Operations)
+// ============================================================================
+
+export { provisionOrganization } from './provisioning/organization';
+export { provisionUser } from './provisioning/user';
+export {
+  createTenantRole,
+  type CreateTenantRoleParams,
+} from './provisioning/role';
+
+// ============================================================================
+// Role Management (Runtime Operations)
+// ============================================================================
+
+export {
+  createRole,
+  addUserToRole,
+  grantPermissionToRole,
+  grantPermissionsToRole,
+} from './roles/manage';
+
+// ============================================================================
 // Utilities
 // ============================================================================
 
@@ -114,7 +148,10 @@ export {
   validateQuery,
   validateUrl,
   validateContent,
+  validateEmail,
+  validateTenantName,
 } from './util/validate';
+export { generateSecurePassword } from './util/security';
 
 // Re-export hash utilities from lib
 export { sha256, sha256Native } from './lib/hash';

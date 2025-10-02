@@ -147,6 +147,133 @@ if (result.success) {
 }
 ```
 
+## Authentication & Provisioning
+
+`@lineai/memory` integrates with Cognee's multi-tenant authentication system. Line AI organizations map 1:1 to Cognee tenants, and Line AI users map to Cognee users.
+
+### Architecture
+
+- **Cognee Tenant** ↔ **Line AI Organization** (1:1 mapping)
+- **Cognee User** ↔ **Line AI User** (1:1 mapping)
+- **Cognee Role** ↔ Line AI user groups/roles
+- **Dataset Permissions** → Managed through Cognee's ACL system
+
+### Provisioning Flow
+
+When a Line AI organization is created, you should:
+
+1. **Provision a Cognee tenant** (one-time, when organization is created)
+2. **Provision Cognee users** (when Line AI users are created)
+3. **Create roles** (optional, for grouping users)
+
+#### 1. Provision Tenant
+
+```typescript
+import { provisionCogneeTenant } from '@lineai/memory';
+
+const result = await provisionCogneeTenant({
+  cogneeUrl: 'http://localhost:8000',
+  superuserCreds: {
+    username: 'admin@cognee.local',
+    password: process.env.COGNEE_ADMIN_PASSWORD,
+  },
+  tenantName: 'acme-corp', // Organization slug
+});
+
+if (result.success) {
+  // Store tenantId in your organization database
+  await db.organizations.update(orgId, {
+    cogneeTenantId: result.value.tenantId,
+  });
+}
+```
+
+#### 2. Provision User
+
+```typescript
+import { provisionCogneeUser } from '@lineai/memory';
+
+const result = await provisionCogneeUser({
+  cogneeUrl: 'http://localhost:8000',
+  superuserCreds: {
+    username: 'admin@cognee.local',
+    password: process.env.COGNEE_ADMIN_PASSWORD,
+  },
+  tenantId: 'tenant-acme-corp',
+  userEmail: 'alice@acme.com',
+  // password is optional - will auto-generate if not provided
+});
+
+if (result.success) {
+  // IMPORTANT: Store userId and ENCRYPTED password
+  await db.users.update(userId, {
+    cogneeUserId: result.value.userId,
+    cogneePassword: await encrypt(result.value.password),
+  });
+}
+```
+
+#### 3. Create Roles (Optional)
+
+```typescript
+import { createTenantRole, addUserToTenantRole } from '@lineai/memory';
+
+// Create role
+const roleResult = await createTenantRole({
+  cogneeUrl: 'http://localhost:8000',
+  superuserCreds: {
+    username: 'admin@cognee.local',
+    password: process.env.COGNEE_ADMIN_PASSWORD,
+  },
+  tenantId: 'tenant-acme-corp',
+  role: {
+    roleName: 'data-scientists',
+    members: ['user-123', 'user-456'], // Optional initial members
+  },
+});
+
+// Add user to role later
+await addUserToTenantRole(
+  'http://localhost:8000',
+  { username: 'admin@cognee.local', password: process.env.COGNEE_ADMIN_PASSWORD },
+  'tenant-acme-corp',
+  'data-scientists',
+  'user-789'
+);
+```
+
+### Session Creation
+
+Once users are provisioned, create sessions using their Cognee credentials:
+
+```typescript
+import { createSession } from '@lineai/memory';
+
+const sessionResult = await createSession({
+  cogneeUrl: 'http://localhost:8000',
+  credentials: {
+    username: user.email, // Cognee username
+    password: await decrypt(user.cogneePassword), // Decrypted password
+  },
+  organizationId: user.organizationId,
+  datasetStrategy: {
+    scope: 'user',
+    organizationId: user.organizationId,
+    userId: user.id,
+  },
+});
+```
+
+### Security Best Practices
+
+1. **Never store passwords in plain text** - Always encrypt Cognee passwords before storing
+2. **Use environment variables** - Store superuser credentials in `process.env`
+3. **Limit superuser access** - Only use superuser credentials for provisioning operations
+4. **Rotate passwords** - Implement password rotation for long-lived users
+5. **Use HTTPS** - Always use `https://` URLs in production
+
+For more details, see [AUTHENTICATION.md](./AUTHENTICATION.md).
+
 ## API Reference
 
 ### Session Management
