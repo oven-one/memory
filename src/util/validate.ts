@@ -170,3 +170,87 @@ export const validateContent = (content: unknown): Outcome<unknown> => {
 
   return { success: true, value: content };
 };
+
+/**
+ * Validate email format
+ *
+ * @param email - Email address to validate
+ * @returns Validation outcome
+ */
+export const validateEmail = (email: string): Outcome<string> => {
+  if (!email || email.trim().length === 0) {
+    return {
+      success: false,
+      error: {
+        error: 'invalid_input',
+        field: 'email',
+        message: 'Email is required',
+      },
+    };
+  }
+
+  // Basic email validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return {
+      success: false,
+      error: {
+        error: 'invalid_input',
+        field: 'email',
+        message: 'Invalid email format',
+      },
+    };
+  }
+
+  return { success: true, value: email };
+};
+
+/**
+ * Validate tenant name format
+ *
+ * Tenant names must:
+ * - Be 1-50 characters
+ * - Contain only lowercase alphanumeric and hyphen
+ * - Start with a letter
+ * - Not end with hyphen
+ *
+ * @param name - Tenant name to validate
+ * @returns Validation outcome
+ */
+export const validateTenantName = (name: string): Outcome<string> => {
+  if (!name || name.trim().length === 0) {
+    return {
+      success: false,
+      error: {
+        error: 'invalid_input',
+        field: 'tenantName',
+        message: 'Tenant name is required',
+      },
+    };
+  }
+
+  if (name.length > 50) {
+    return {
+      success: false,
+      error: {
+        error: 'invalid_input',
+        field: 'tenantName',
+        message: 'Tenant name too long (max 50 chars)',
+      },
+    };
+  }
+
+  if (!/^[a-z][a-z0-9-]*[a-z0-9]$/.test(name)) {
+    return {
+      success: false,
+      error: {
+        error: 'invalid_input',
+        field: 'tenantName',
+        message:
+          'Tenant name must start with letter, contain only lowercase alphanumeric and hyphen, and not end with hyphen',
+      },
+    };
+  }
+
+  return { success: true, value: name };
+};
