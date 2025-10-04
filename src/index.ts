@@ -51,6 +51,8 @@ export type {
 
 export type {
   // Provisioning types
+  ProvisionAdminUserParams,
+  ProvisionAdminUserResult,
   ProvisionUserParams,
   ProvisionUserResult,
   RoleParams,
@@ -113,7 +115,7 @@ export {
 // ============================================================================
 
 export { provisionOrganization } from './provisioning/organization';
-export { provisionUser } from './provisioning/user';
+export { provisionUser, provisionAdminUser } from './provisioning/user';
 export {
   createTenantRole,
   type CreateTenantRoleParams,

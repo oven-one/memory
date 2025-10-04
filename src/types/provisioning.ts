@@ -3,6 +3,27 @@
  * Types for provisioning Cognee tenants, users, and roles
  */
 
+import type { Credentials } from './session';
+
+/**
+ * Parameters for provisioning an admin user
+ */
+export type ProvisionAdminUserParams = {
+  readonly cogneeUrl: string;
+  readonly superuserCreds: Credentials;
+  readonly adminEmail: string;
+  readonly adminPassword?: string; // Optional: auto-generate if not provided
+};
+
+/**
+ * Result of admin user provisioning
+ */
+export type ProvisionAdminUserResult = {
+  readonly userId: string;
+  readonly email: string;
+  readonly password: string; // Store encrypted!
+};
+
 /**
  * Parameters for provisioning a Cognee user
  */

@@ -11,6 +11,7 @@
  */
 
 import {
+  provisionAdminUser,
   provisionOrganization,
   provisionUser,
   createTenantRole,
@@ -40,27 +41,51 @@ export async function onboardOrganization(data: {
 }) {
   console.log(`Onboarding organization: ${data.organizationName}`);
 
-  // Step 1: Provision organization (creates admin user AND tenant)
-  console.log('Step 1: Provisioning organization with admin user and tenant...');
-  const orgResult = await provisionOrganization({
+  // Step 1: Create admin user account
+  console.log('Step 1: Creating admin user account...');
+  const adminResult = await provisionAdminUser({
     cogneeUrl: data.cogneeUrl,
     superuserCreds: {
       username: data.superuserUsername,
       password: data.superuserPassword,
     },
-    organizationName: data.organizationSlug,
     adminEmail: data.adminEmail,
   });
 
-  if (!orgResult.success) {
-    throw new Error(`Failed to provision organization: ${orgResult.error.message}`);
+  if (!adminResult.success) {
+    throw new Error(`Failed to create admin user: ${adminResult.error.message}`);
   }
 
-  console.log(`✓ Organization provisioned:`);
-  console.log(`  - Tenant ID: ${orgResult.value.tenantId}`);
-  console.log(`  - Admin User ID: ${orgResult.value.adminUserId}`);
+  console.log(`✓ Admin user created: ${adminResult.value.userId}`);
 
-  // Step 2: Store in your database
+  // Step 2: Store admin user credentials securely BEFORE creating organization
+  const encryptedPassword = encryptPassword(adminResult.value.password);
+  const admin = {
+    id: `user-${Date.now()}`,
+    email: adminResult.value.email,
+    role: 'admin',
+    cogneeUserId: adminResult.value.userId,
+    cogneePassword: encryptedPassword,
+  };
+  // await db.users.create(admin);
+  console.log(`✓ Admin credentials stored securely`);
+
+  // Step 3: Create organization (tenant) using admin credentials
+  console.log('Step 2: Creating organization tenant...');
+  const orgResult = await provisionOrganization({
+    cogneeUrl: data.cogneeUrl,
+    adminEmail: adminResult.value.email,
+    adminPassword: adminResult.value.password,
+    organizationName: data.organizationSlug,
+  });
+
+  if (!orgResult.success) {
+    throw new Error(`Failed to create organization: ${orgResult.error.message}`);
+  }
+
+  console.log(`✓ Organization tenant created: ${orgResult.value.tenantId}`);
+
+  // Step 4: Store organization in database
   const org = {
     id: `org-${Date.now()}`,
     name: data.organizationName,
@@ -70,24 +95,15 @@ export async function onboardOrganization(data: {
   // await db.organizations.create(org);
   console.log(`✓ Organization created in database: ${org.id}`);
 
-  // Step 3: Store admin user in your database (with ENCRYPTED password!)
-  const encryptedPassword = encryptPassword(orgResult.value.adminPassword);
-  const admin = {
-    id: `user-${Date.now()}`,
-    email: data.adminEmail,
-    organizationId: org.id,
-    role: 'admin',
-    cogneeUserId: orgResult.value.adminUserId,
-    cogneePassword: encryptedPassword,
-  };
-  // await db.users.create(admin);
-  console.log(`✓ Admin user created in database: ${admin.id}`);
+  // Link admin to organization
+  admin.organizationId = org.id;
+  // await db.users.update(admin.id, { organizationId: org.id });
 
   // IMPORTANT: Return password securely (e.g., send via email)
   return {
     organization: org,
     adminUser: admin,
-    adminPassword: orgResult.value.adminPassword, // Send this securely!
+    adminPassword: adminResult.value.password, // Send this securely!
   };
 }
 

@@ -162,84 +162,101 @@ if (result.success) {
 
 When a Line AI organization is created, you should:
 
-1. **Provision a Cognee tenant** (one-time, when organization is created)
-2. **Provision Cognee users** (when Line AI users are created)
+1. **Provision organization** (creates tenant + admin user atomically)
+2. **Provision additional users** (when Line AI users join the organization)
 3. **Create roles** (optional, for grouping users)
 
-#### 1. Provision Tenant
+#### 1. Provision Organization
 
 ```typescript
-import { provisionCogneeTenant } from '@lineai/memory';
+import { provisionOrganization } from '@lineai/memory';
 
-const result = await provisionCogneeTenant({
+const result = await provisionOrganization({
   cogneeUrl: 'http://localhost:8000',
   superuserCreds: {
     username: 'admin@cognee.local',
     password: process.env.COGNEE_ADMIN_PASSWORD,
   },
-  tenantName: 'acme-corp', // Organization slug
+  organizationName: 'acme-corp', // Organization slug
+  adminEmail: 'alice@acme.com',
+  // adminPassword is optional - will auto-generate if not provided
 });
 
 if (result.success) {
-  // Store tenantId in your organization database
+  // Store tenant ID and admin user info
   await db.organizations.update(orgId, {
     cogneeTenantId: result.value.tenantId,
   });
+
+  await db.users.create({
+    email: result.value.adminEmail,
+    cogneeUserId: result.value.adminUserId,
+    cogneePassword: await encrypt(result.value.adminPassword), // IMPORTANT: Encrypt!
+    role: 'admin',
+  });
+
+  // Securely send password to admin
+  await sendEmail(result.value.adminEmail, result.value.adminPassword);
 }
 ```
 
 #### 2. Provision User
 
 ```typescript
-import { provisionCogneeUser } from '@lineai/memory';
+import { provisionUser } from '@lineai/memory';
 
-const result = await provisionCogneeUser({
+// Get admin credentials (stored during org provisioning)
+const org = await db.organizations.findById(orgId);
+const admin = await db.users.findOne({ organizationId: orgId, role: 'admin' });
+const adminPassword = await decrypt(admin.cogneePassword);
+
+const result = await provisionUser({
   cogneeUrl: 'http://localhost:8000',
-  superuserCreds: {
-    username: 'admin@cognee.local',
-    password: process.env.COGNEE_ADMIN_PASSWORD,
-  },
-  tenantId: 'tenant-acme-corp',
-  userEmail: 'alice@acme.com',
+  adminEmail: admin.email,
+  adminPassword: adminPassword,
+  userEmail: 'bob@acme.com',
   // password is optional - will auto-generate if not provided
 });
 
 if (result.success) {
   // IMPORTANT: Store userId and ENCRYPTED password
-  await db.users.update(userId, {
+  await db.users.create({
+    email: result.value.email,
     cogneeUserId: result.value.userId,
     cogneePassword: await encrypt(result.value.password),
+    organizationId: orgId,
   });
+
+  // Securely send password to user
+  await sendEmail(result.value.email, result.value.password);
 }
 ```
 
 #### 3. Create Roles (Optional)
 
 ```typescript
-import { createTenantRole, addUserToTenantRole } from '@lineai/memory';
+import { createTenantRole } from '@lineai/memory';
 
-// Create role
+// Get admin credentials
+const admin = await db.users.findOne({ organizationId: orgId, role: 'admin' });
+const adminPassword = await decrypt(admin.cogneePassword);
+
+// Create role using admin credentials
 const roleResult = await createTenantRole({
   cogneeUrl: 'http://localhost:8000',
-  superuserCreds: {
-    username: 'admin@cognee.local',
-    password: process.env.COGNEE_ADMIN_PASSWORD,
-  },
-  tenantId: 'tenant-acme-corp',
-  role: {
-    roleName: 'data-scientists',
-    members: ['user-123', 'user-456'], // Optional initial members
-  },
+  ownerEmail: admin.email,
+  ownerPassword: adminPassword,
+  roleName: 'data-scientists',
 });
 
-// Add user to role later
-await addUserToTenantRole(
-  'http://localhost:8000',
-  { username: 'admin@cognee.local', password: process.env.COGNEE_ADMIN_PASSWORD },
-  'tenant-acme-corp',
-  'data-scientists',
-  'user-789'
-);
+if (roleResult.success) {
+  // Store role ID for later use
+  await db.roles.create({
+    name: 'data-scientists',
+    cogneeRoleId: roleResult.value.roleId, // ✅ Real UUID now!
+    tenantId: org.cogneeTenantId,
+  });
+}
 ```
 
 ### Session Creation
