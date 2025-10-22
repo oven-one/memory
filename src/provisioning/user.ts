@@ -7,7 +7,6 @@ import {
   type CogneeConfig,
   getCurrentUser,
   login,
-  logout,
   register,
 } from '@lineai/cognee-api';
 
@@ -67,25 +66,30 @@ export const provisionUser = async (
     // Generate password if not provided
     const password = params.password || generateSecurePassword();
 
-    // Step 1: Login as admin (who owns the tenant)
-    await login(config, {
+    // Step 1: Login as admin (who owns the tenant) and get access token
+    const loginResponse = await login(config, {
       username: params.adminEmail,
       password: params.adminPassword,
     });
 
+    // Create config with auth token for subsequent requests
+    const configWithAuth: CogneeConfig = {
+      ...config,
+      authToken: loginResponse.access_token,
+    };
+
     // Step 2: Get admin's tenant_id
-    const admin = await getCurrentUser(config);
+    const admin = await getCurrentUser(configWithAuth);
     const tenantId = admin.tenant_id!;
 
     // Step 3: Register new user WITH admin's tenant_id
-    const newUser = await register(config, {
+    const newUser = await register(configWithAuth, {
       email: params.userEmail,
       password: password,
       tenant_id: tenantId,
     });
 
-    // Step 4: Logout admin
-    await logout(config);
+    // Provisioning complete - token will be created on first memory operation
 
     const result: ProvisionUserResult = {
       userId: newUser.id,
@@ -156,18 +160,24 @@ export const provisionAdminUser = async (
     // Generate password if not provided
     const password = params.adminPassword || generateSecurePassword();
 
-    // Step 1: Login as superuser
-    await login(config, params.superuserCreds);
+    // Step 1: Login as superuser and get token
+    const loginResponse = await login(config, params.superuserCreds);
+
+    // Create config with auth token for subsequent requests
+    const configWithAuth: CogneeConfig = {
+      ...config,
+      authToken: loginResponse.access_token,
+    };
 
     // Step 2: Register admin user WITHOUT tenant
-    const newUser = await register(config, {
+    // Note: Registration automatically logs in the new user, invalidating superuser session
+    const newUser = await register(configWithAuth, {
       email: params.adminEmail,
       password: password,
       // NO tenant_id - user starts without tenant
     });
 
-    // Step 3: Logout superuser
-    await logout(config);
+    // Provisioning complete - token will be created on first memory operation
 
     const result: ProvisionAdminUserResult = {
       userId: newUser.id,

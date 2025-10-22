@@ -88,67 +88,117 @@ When `ENABLE_BACKEND_ACCESS_CONTROL=true` (production setting):
 
 ## Provisioning Workflow
 
-### Step 1: Provision Tenant (When Organization is Created)
+### Step 1: Create Admin User (When Organization is Created)
 
-This is a **one-time operation** when a Line AI organization is first created.
+This is a **two-step operation** when a Line AI organization is first created. First, create the admin user account.
 
 ```typescript
-import { provisionCogneeTenant } from '@lineai/memory';
+import { provisionAdminUser } from '@lineai/memory';
+import { encrypt } from './crypto'; // Your encryption library
 
-// In your organization creation handler
-export async function createOrganization(orgData: {
+// In your organization creation handler - Part 1: Create Admin
+export async function createOrganizationAdmin(orgData: {
   name: string;
   slug: string;
+  adminEmail: string;
 }) {
+  // 1. Provision admin user in Cognee (without tenant)
+  const adminResult = await provisionAdminUser({
+    cogneeUrl: process.env.COGNEE_URL,
+    superuserCreds: {
+      username: process.env.COGNEE_ADMIN_USERNAME,
+      password: process.env.COGNEE_ADMIN_PASSWORD,
+    },
+    adminEmail: orgData.adminEmail,
+  });
+
+  if (!adminResult.success) {
+    throw new Error(`Failed to create admin user: ${adminResult.error.message}`);
+  }
+
+  // 2. IMPORTANT: Store credentials BEFORE creating organization
+  const admin = await db.users.create({
+    email: adminResult.value.email,
+    cogneeUserId: adminResult.value.userId,
+    cogneePassword: await encrypt(adminResult.value.password), // IMPORTANT: Encrypt!
+    role: 'admin',
+  });
+
+  return { admin, password: adminResult.value.password };
+}
+```
+
+### Step 2: Provision Organization (Create Tenant)
+
+After storing admin credentials, create the organization tenant.
+
+```typescript
+import { provisionOrganization } from '@lineai/memory';
+
+// In your organization creation handler - Part 2: Create Tenant
+export async function createOrganizationTenant(
+  orgData: {
+    name: string;
+    slug: string;
+  },
+  adminEmail: string,
+  adminPassword: string
+) {
   // 1. Create organization in Line AI database
   const org = await db.organizations.create({
     name: orgData.name,
     slug: orgData.slug,
   });
 
-  // 2. Provision Cognee tenant
-  const tenantResult = await provisionCogneeTenant({
+  // 2. Provision Cognee tenant using admin credentials
+  const orgResult = await provisionOrganization({
     cogneeUrl: process.env.COGNEE_URL,
-    superuserCreds: {
-      username: process.env.COGNEE_ADMIN_USERNAME,
-      password: process.env.COGNEE_ADMIN_PASSWORD,
-    },
-    tenantName: orgData.slug, // Use slug for tenant name
+    adminEmail: adminEmail,
+    adminPassword: adminPassword,
+    organizationName: orgData.slug, // Use slug for tenant name
   });
 
-  if (!tenantResult.success) {
+  if (!orgResult.success) {
     // Rollback: delete org
     await db.organizations.delete(org.id);
-    throw new Error(`Failed to provision tenant: ${tenantResult.error.message}`);
+    throw new Error(`Failed to provision tenant: ${orgResult.error.message}`);
   }
 
   // 3. Store Cognee tenant ID
   await db.organizations.update(org.id, {
-    cogneeTenantId: tenantResult.value.tenantId,
+    cogneeTenantId: orgResult.value.tenantId,
   });
 
   return org;
 }
 ```
 
-### Step 2: Provision User (When User Joins Organization)
+**Why two steps?** Separating admin user creation from organization creation prevents an irrecoverable state where the user exists but credentials were never returned. Always store admin credentials before attempting to create the organization.
+
+### Step 3: Provision User (When User Joins Organization)
 
 This happens when a user is created or added to an organization.
 
 ```typescript
-import { provisionCogneeUser } from '@lineai/memory';
-import { encrypt } from './crypto'; // Your encryption library
+import { provisionUser } from '@lineai/memory';
+import { encrypt, decrypt } from './crypto'; // Your encryption library
 
 // In your user creation handler
 export async function createUser(userData: {
   email: string;
   organizationId: string;
 }) {
-  // 1. Get organization's Cognee tenant ID
+  // 1. Get organization and admin credentials
   const org = await db.organizations.findById(userData.organizationId);
   if (!org.cogneeTenantId) {
     throw new Error('Organization not provisioned with Cognee');
   }
+
+  const admin = await db.users.findOne({
+    organizationId: userData.organizationId,
+    role: 'admin'
+  });
+  const adminPassword = await decrypt(admin.cogneePassword);
 
   // 2. Create user in Line AI database
   const user = await db.users.create({
@@ -156,14 +206,11 @@ export async function createUser(userData: {
     organizationId: userData.organizationId,
   });
 
-  // 3. Provision Cognee user
-  const userResult = await provisionCogneeUser({
+  // 3. Provision Cognee user using admin credentials
+  const userResult = await provisionUser({
     cogneeUrl: process.env.COGNEE_URL,
-    superuserCreds: {
-      username: process.env.COGNEE_ADMIN_USERNAME,
-      password: process.env.COGNEE_ADMIN_PASSWORD,
-    },
-    tenantId: org.cogneeTenantId,
+    adminEmail: admin.email,
+    adminPassword: adminPassword,
     userEmail: userData.email,
     // Let it auto-generate a secure password
   });
@@ -400,60 +447,65 @@ const cogneeUrl =
 
 ### Pattern 1: Organization Onboarding
 
-Complete flow for onboarding a new organization:
+Complete flow for onboarding a new organization (two-step process):
 
 ```typescript
+import { provisionAdminUser, provisionOrganization } from '@lineai/memory';
+
 export async function onboardOrganization(data: {
   name: string;
   slug: string;
   adminEmail: string;
 }) {
-  // 1. Provision tenant
-  const tenantResult = await provisionCogneeTenant({
+  // Step 1: Create admin user account
+  const adminResult = await provisionAdminUser({
     cogneeUrl: process.env.COGNEE_URL,
     superuserCreds: {
       username: process.env.COGNEE_ADMIN_USERNAME,
       password: process.env.COGNEE_ADMIN_PASSWORD,
     },
-    tenantName: data.slug,
+    adminEmail: data.adminEmail,
   });
 
-  if (!tenantResult.success) {
-    throw new Error('Failed to provision tenant');
+  if (!adminResult.success) {
+    throw new Error('Failed to create admin user');
   }
 
-  // 2. Create organization
+  // Step 2: Store admin credentials BEFORE creating tenant
+  const admin = await db.users.create({
+    email: adminResult.value.email,
+    cogneeUserId: adminResult.value.userId,
+    cogneePassword: await encrypt(adminResult.value.password),
+    role: 'admin',
+  });
+
+  // Step 3: Create organization tenant using admin credentials
+  const orgResult = await provisionOrganization({
+    cogneeUrl: process.env.COGNEE_URL,
+    adminEmail: adminResult.value.email,
+    adminPassword: adminResult.value.password,
+    organizationName: data.slug,
+  });
+
+  if (!orgResult.success) {
+    // Rollback: delete admin user
+    await db.users.delete(admin.id);
+    throw new Error('Failed to provision organization');
+  }
+
+  // Step 4: Create organization in database
   const org = await db.organizations.create({
     name: data.name,
     slug: data.slug,
-    cogneeTenantId: tenantResult.value.tenantId,
+    cogneeTenantId: orgResult.value.tenantId,
   });
 
-  // 3. Provision admin user
-  const userResult = await provisionCogneeUser({
-    cogneeUrl: process.env.COGNEE_URL,
-    superuserCreds: {
-      username: process.env.COGNEE_ADMIN_USERNAME,
-      password: process.env.COGNEE_ADMIN_PASSWORD,
-    },
-    tenantId: tenantResult.value.tenantId,
-    userEmail: data.adminEmail,
-  });
-
-  if (!userResult.success) {
-    throw new Error('Failed to provision admin user');
-  }
-
-  // 4. Create admin user in database
-  const user = await db.users.create({
-    email: data.adminEmail,
+  // Step 5: Link admin to organization
+  await db.users.update(admin.id, {
     organizationId: org.id,
-    role: 'admin',
-    cogneeUserId: userResult.value.userId,
-    cogneePassword: await encrypt(userResult.value.password),
   });
 
-  return { org, user, password: userResult.value.password };
+  return { org, user: admin, password: adminResult.value.password };
 }
 ```
 
@@ -462,6 +514,8 @@ export async function onboardOrganization(data: {
 Invite a user to an existing organization:
 
 ```typescript
+import { provisionUser } from '@lineai/memory';
+
 export async function inviteUser(data: {
   email: string;
   organizationId: string;
@@ -469,14 +523,18 @@ export async function inviteUser(data: {
 }) {
   const org = await db.organizations.findById(data.organizationId);
 
-  // Provision user in Cognee
-  const userResult = await provisionCogneeUser({
+  // Get admin credentials for provisioning
+  const admin = await db.users.findOne({
+    organizationId: data.organizationId,
+    role: 'admin'
+  });
+  const adminPassword = await decrypt(admin.cogneePassword);
+
+  // Provision user in Cognee using admin credentials
+  const userResult = await provisionUser({
     cogneeUrl: process.env.COGNEE_URL,
-    superuserCreds: {
-      username: process.env.COGNEE_ADMIN_USERNAME,
-      password: process.env.COGNEE_ADMIN_PASSWORD,
-    },
-    tenantId: org.cogneeTenantId,
+    adminEmail: admin.email,
+    adminPassword: adminPassword,
     userEmail: data.email,
   });
 

@@ -5,7 +5,6 @@
 
 import {
   login,
-  logout,
   createTenant,
   getCurrentUser,
   type CogneeConfig,
@@ -76,20 +75,25 @@ export const provisionOrganization = async (
       baseUrl: params.cogneeUrl,
     };
 
-    // Step 1: Login as the admin user
-    await login(config, {
+    // Step 1: Login as the admin user and get access token
+    const loginResponse = await login(config, {
       username: params.adminEmail,
       password: params.adminPassword,
     });
 
+    // Create config with auth token for subsequent requests
+    const configWithAuth: CogneeConfig = {
+      ...config,
+      authToken: loginResponse.access_token,
+    };
+
     // Step 2: Admin creates their tenant
-    await createTenant(config, params.organizationName);
+    await createTenant(configWithAuth, params.organizationName);
 
     // Step 3: Get tenant details
-    const adminUser = await getCurrentUser(config);
+    const adminUser = await getCurrentUser(configWithAuth);
 
-    // Step 4: Logout admin
-    await logout(config);
+    // NO logout - keep token alive for future operations
 
     const result: ProvisionOrganizationResult = {
       tenantId: adminUser.tenant_id!,

@@ -493,10 +493,10 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@lineai/cognee-api@^1.0.2":
-  version "1.0.2"
-  resolved "https://registry.yarnpkg.com/@lineai/cognee-api/-/cognee-api-1.0.2.tgz#31704a97212c3b1acc55d952267f3dcf6589ade1"
-  integrity sha512-2q3MIzaMRt9EXPqtSCkcj/W+Dhs2Sh9S7iQoQFnvsXsAtewiW3sfSbYC6Pz5XKAJoZYQozqFW9Qz/zFNY39kTA==
+"@lineai/cognee-api@^1.0.14":
+  version "1.0.14"
+  resolved "https://registry.yarnpkg.com/@lineai/cognee-api/-/cognee-api-1.0.14.tgz#8b84e74775252082ceb13e4c23c6dc36dc04ccf6"
+  integrity sha512-VTsLV7H+xIrZOrcxQ4nU8xTHbCOpWpyDtTnWNQFB9LjuQ69BACSRmOA6sLl74nscZRsgU/hGC7Ndq2FDhq0fPg==
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"

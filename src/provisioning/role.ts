@@ -8,7 +8,6 @@ import {
   createRole,
   getRoleByName,
   login,
-  logout,
 } from '@lineai/cognee-api';
 
 import type { Outcome } from '../types/errors';
@@ -77,19 +76,24 @@ export const createTenantRole = async (
 
     // Authenticate as tenant owner (NOT superuser!)
     // This ensures the role is created in the owner's tenant
-    await login(config, {
+    const loginResponse = await login(config, {
       username: params.ownerEmail,
       password: params.ownerPassword,
     });
 
+    // Create config with auth token
+    const configWithAuth: CogneeConfig = {
+      ...config,
+      authToken: loginResponse.access_token,
+    };
+
     // Create role - will be created in authenticated user's tenant
-    await createRole(config, params.roleName);
+    await createRole(configWithAuth, params.roleName);
 
     // Retrieve the created role to get its ID
-    const role = await getRoleByName(config, params.roleName);
+    const role = await getRoleByName(configWithAuth, params.roleName);
 
-    // Logout
-    await logout(config);
+    // NO logout - keep token alive for future operations
 
     const result: RoleResult = {
       roleId: role.id,

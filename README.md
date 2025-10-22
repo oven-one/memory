@@ -162,45 +162,70 @@ if (result.success) {
 
 When a Line AI organization is created, you should:
 
-1. **Provision organization** (creates tenant + admin user atomically)
-2. **Provision additional users** (when Line AI users join the organization)
-3. **Create roles** (optional, for grouping users)
+1. **Create admin user** (creates admin account without tenant)
+2. **Provision organization** (creates tenant owned by admin)
+3. **Provision additional users** (when Line AI users join the organization)
+4. **Create roles** (optional, for grouping users)
 
-#### 1. Provision Organization
+#### 1. Create Admin User
 
 ```typescript
-import { provisionOrganization } from '@lineai/memory';
+import { provisionAdminUser } from '@lineai/memory';
 
-const result = await provisionOrganization({
+// Step 1: Create admin user account
+const adminResult = await provisionAdminUser({
   cogneeUrl: 'http://localhost:8000',
   superuserCreds: {
     username: 'admin@cognee.local',
     password: process.env.COGNEE_ADMIN_PASSWORD,
   },
-  organizationName: 'acme-corp', // Organization slug
   adminEmail: 'alice@acme.com',
   // adminPassword is optional - will auto-generate if not provided
 });
 
-if (result.success) {
-  // Store tenant ID and admin user info
-  await db.organizations.update(orgId, {
-    cogneeTenantId: result.value.tenantId,
-  });
-
+if (adminResult.success) {
+  // IMPORTANT: Store credentials BEFORE creating organization
   await db.users.create({
-    email: result.value.adminEmail,
-    cogneeUserId: result.value.adminUserId,
-    cogneePassword: await encrypt(result.value.adminPassword), // IMPORTANT: Encrypt!
+    email: adminResult.value.email,
+    cogneeUserId: adminResult.value.userId,
+    cogneePassword: await encrypt(adminResult.value.password), // IMPORTANT: Encrypt!
     role: 'admin',
   });
 
   // Securely send password to admin
-  await sendEmail(result.value.adminEmail, result.value.adminPassword);
+  await sendEmail(adminResult.value.email, adminResult.value.password);
 }
 ```
 
-#### 2. Provision User
+#### 2. Provision Organization
+
+```typescript
+import { provisionOrganization } from '@lineai/memory';
+
+// Step 2: Create organization tenant using admin credentials
+const orgResult = await provisionOrganization({
+  cogneeUrl: 'http://localhost:8000',
+  adminEmail: adminResult.value.email,
+  adminPassword: adminResult.value.password,
+  organizationName: 'acme-corp', // Organization slug
+});
+
+if (orgResult.success) {
+  // Store tenant ID
+  await db.organizations.create({
+    cogneeTenantId: orgResult.value.tenantId,
+  });
+
+  // Link admin user to organization
+  await db.users.update(adminUserId, {
+    organizationId: orgId,
+  });
+}
+```
+
+**Why two steps?** Separating admin user creation from organization creation prevents an irrecoverable state where the user exists but credentials were never returned. Always store admin credentials before attempting to create the organization.
+
+#### 3. Provision User
 
 ```typescript
 import { provisionUser } from '@lineai/memory';
@@ -232,7 +257,7 @@ if (result.success) {
 }
 ```
 
-#### 3. Create Roles (Optional)
+#### 4. Create Roles (Optional)
 
 ```typescript
 import { createTenantRole } from '@lineai/memory';

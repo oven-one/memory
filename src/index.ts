@@ -41,6 +41,7 @@ export type {
   Permission,
   Dataset,
   DatasetGraph,
+  DatasetDataItem,
 } from './types/dataset';
 
 export type {
@@ -100,6 +101,7 @@ export {
   listDatasets,
   createDataset,
   getDatasetGraph,
+  getDatasetData,
   deleteDataset,
 } from './dataset/manage';
 export { shareDataset, revokeAccess } from './dataset/permissions';

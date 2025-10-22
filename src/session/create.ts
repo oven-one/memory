@@ -32,20 +32,26 @@ export const createSession = async (
       baseUrl: params.cogneeUrl,
     };
 
-    // Authenticate
-    await login(config, params.credentials);
+    // Authenticate and get token
+    const loginResponse = await login(config, params.credentials);
+
+    // Create config with auth token
+    const configWithAuth: CogneeConfig = {
+      baseUrl: params.cogneeUrl,
+      authToken: loginResponse.access_token,
+    };
 
     // Get current user info
-    const user = await getCurrentUser(config);
+    const user = await getCurrentUser(configWithAuth);
 
-    // Create session
+    // Create session with authenticated config
     const session: Session = {
       cogneeUrl: params.cogneeUrl,
       organizationId: params.organizationId,
       userId: user.id,
       userName: user.email,
       datasetStrategy: params.datasetStrategy,
-      config,
+      config: configWithAuth,
     };
 
     return { success: true, value: session };
