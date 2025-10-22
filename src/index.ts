@@ -90,6 +90,16 @@ export {
   searchInsights,
   searchSummaries,
   searchCode,
+  searchRAG,
+  searchGraphSummary,
+  searchCypher,
+  searchNaturalLanguage,
+  searchChainOfThought,
+  searchContextExtension,
+  searchFeelingLucky,
+  searchFeedback,
+  searchTemporal,
+  searchCodingRules,
 } from './search/query';
 export { getSearchHistory } from './search/history';
 
