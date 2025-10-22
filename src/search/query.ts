@@ -141,9 +141,10 @@ const performSearch = async (
     // Perform search
     const results = await cogneeSearch(session.config, {
       query: query.text,
-      search_type: searchType,
+      searchType: searchType,
       datasets: organizationDatasets,
-      top_k: query.topK,
+      nodeName: query.tags, // Scope search to specific cards via node sets
+      topK: query.topK,
     });
 
     // Convert results to our format

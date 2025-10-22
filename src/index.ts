@@ -41,6 +41,7 @@ export type {
   Permission,
   Dataset,
   DatasetGraph,
+  DatasetDataItem,
 } from './types/dataset';
 
 export type {
@@ -51,6 +52,8 @@ export type {
 
 export type {
   // Provisioning types
+  ProvisionAdminUserParams,
+  ProvisionAdminUserResult,
   ProvisionUserParams,
   ProvisionUserResult,
   RoleParams,
@@ -98,6 +101,7 @@ export {
   listDatasets,
   createDataset,
   getDatasetGraph,
+  getDatasetData,
   deleteDataset,
 } from './dataset/manage';
 export { shareDataset, revokeAccess } from './dataset/permissions';
@@ -113,7 +117,7 @@ export {
 // ============================================================================
 
 export { provisionOrganization } from './provisioning/organization';
-export { provisionUser } from './provisioning/user';
+export { provisionUser, provisionAdminUser } from './provisioning/user';
 export {
   createTenantRole,
   type CreateTenantRoleParams,

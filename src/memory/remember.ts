@@ -50,11 +50,15 @@ export const remember = async (
     // Compute content hash
     const contentHash = await computeContentHash(content);
 
-    // Add data to Cognee
+    // Add data to Cognee with tags as node sets for scoping
     const pipelineInfo = await addData(
       session.config,
       [file],
-      { datasetName, datasetId }
+      {
+        datasetName,
+        datasetId,
+        node_set: options?.tags || [] // Pass tags as node sets for search scoping
+      }
     );
 
     // Create memory reference
@@ -105,11 +109,15 @@ export const rememberMany = async (
     // Convert all content to files
     const files = contents.map(contentToFile);
 
-    // Add data to Cognee
+    // Add data to Cognee with tags as node sets for scoping
     const pipelineInfo = await addData(
       session.config,
       files,
-      { datasetName, datasetId }
+      {
+        datasetName,
+        datasetId,
+        node_set: options?.tags || [] // Pass tags as node sets for search scoping
+      }
     );
 
     // Create memory references for all items

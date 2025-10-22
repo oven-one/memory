@@ -4,16 +4,20 @@
  */
 
 import {
-  getDatasets as cogneeGetDatasets,
   createDataset as cogneeCreateDataset,
   deleteDataset as cogneeDeleteDataset,
+  getDatasetData as cogneeGetDatasetData,
   getDatasetGraph as cogneeGetDatasetGraph,
+  getDatasets as cogneeGetDatasets,
+  type DataDTO,
   type DatasetDTO,
 } from '@lineai/cognee-api';
-import type { Session } from '../types/session';
-import type { Dataset, DatasetGraph } from '../types/dataset';
+
+import type { Dataset, DatasetDataItem, DatasetGraph } from '../types/dataset';
 import type { Outcome } from '../types/errors';
+import type { Session } from '../types/session';
 import { mapCogneeError } from '../util/errors';
+
 import { isOrganizationDataset } from './strategy';
 
 /**
@@ -109,6 +113,41 @@ export const getDatasetGraph = async (
 };
 
 /**
+ * Get dataset data items
+ *
+ * Returns all data items (files, documents, etc.) in a dataset
+ *
+ * @param session - Active session
+ * @param datasetId - Dataset ID
+ * @returns Array of data items or error
+ *
+ * @example
+ * ```typescript
+ * const items = await getDatasetData(session, 'dataset-id-123');
+ * if (items.success) {
+ *   items.value.forEach(item => {
+ *     console.log(item.name, item.mimeType, item.extension);
+ *   });
+ * }
+ * ```
+ */
+export const getDatasetData = async (
+  session: Session,
+  datasetId: string
+): Promise<Outcome<readonly DatasetDataItem[]>> => {
+  try {
+    const data = await cogneeGetDatasetData(session.config, datasetId);
+
+    const items = data.map(convertDataItem);
+    console.log(`[Dataset]`, data, items);
+
+    return { success: true, value: items };
+  } catch (err) {
+    return { success: false, error: mapCogneeError(err) };
+  }
+};
+
+/**
  * Delete a dataset
  *
  * @param session - Active session
@@ -143,4 +182,19 @@ const convertDataset = (dto: DatasetDTO): Dataset => ({
   createdAt: dto.created_at,
   updatedAt: dto.updated_at,
   permissions: [], // Cognee doesn't return permissions in dataset list
+});
+
+/**
+ * Convert Cognee DataDTO to our DatasetDataItem type
+ */
+const convertDataItem = (dto: DataDTO): DatasetDataItem => ({
+  id: dto.id,
+  name: dto.name,
+  createdAt: dto.createdAt,
+  updatedAt: dto.updatedAt,
+  extension: dto.extension,
+  mimeType: dto.mimeType,
+  rawDataLocation: dto.rawDataLocation,
+  datasetId: dto.datasetId,
+  nodeSet: dto.nodeSet,
 });

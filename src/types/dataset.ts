@@ -64,3 +64,18 @@ export type Dataset = {
  * Dataset graph for visualization
  */
 export type DatasetGraph = GraphDTO;
+
+/**
+ * Data item in a dataset
+ */
+export type DatasetDataItem = {
+  readonly id: string;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly extension: string;
+  readonly mimeType: string;
+  readonly rawDataLocation: string;
+  readonly datasetId: string;
+  readonly nodeSet?: readonly string[];
+};
