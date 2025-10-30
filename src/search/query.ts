@@ -7,6 +7,7 @@ import {
   search as cogneeSearch,
   SearchType,
   type SearchResult as CogneeSearchResult,
+  GraphDTO,
 } from '@lineai/cognee-api';
 import type { Session } from '../types/session';
 import type { Query, SearchOutcome, SearchResultItem } from '../types/search';
@@ -349,6 +350,8 @@ const performSearch = async (
       return { success: true, value: outcome };
     }
 
+    console.log('Raw search results:', results);
+
     const searchResults: SearchResultItem[] = results.map(
       (result: CogneeSearchResult) => ({
         content: result.search_result,
@@ -358,10 +361,17 @@ const performSearch = async (
       })
     );
 
+    const graphResults: readonly GraphDTO[] = results.map((result: CogneeSearchResult) =>
+      Object.entries(result.graphs || {}).map(([_, graphDto]) =>
+        graphDto)).flat();
+
     const outcome: SearchOutcome = {
       found: true,
       results: searchResults,
+      graphs: graphResults,
     };
+
+    console.log('Processed search outcome:', outcome);
 
     return { success: true, value: outcome };
   } catch (err) {
